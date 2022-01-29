@@ -55,5 +55,5 @@ func HashFolder(path string, h hash.Hash) ([]byte, error) {
 		}
 	}
 
-	return h.Sum(nil), nil
+	return h.Sum((nil)), nil
 }

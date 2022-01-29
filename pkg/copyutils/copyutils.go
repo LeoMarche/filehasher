@@ -2,7 +2,6 @@ package copyutils
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"fmt"
 	"io"
 	"io/fs"
@@ -11,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/LeoMarche/filehasher/pkg/hasherutils"
+	"github.com/cespare/xxhash"
 )
 
 func copyFile(src, dst string, retries int) (int64, error) {
@@ -45,28 +45,31 @@ func copyFile(src, dst string, retries int) (int64, error) {
 		if err != nil {
 			return 0, err
 		}
-		h := sha256.New()
-		h2 := sha256.New()
+		h := xxhash.New()
+		h2 := xxhash.New()
 		hashsrc, err = hasherutils.HashFile(src, h)
 		hashdst, err2 = hasherutils.HashFile(dst, h2)
+
 		if err == nil && err2 == nil {
 			if bytes.Equal(hashsrc, hashdst) {
 				validCopy = true
 			}
 		}
-		retries++
-
+		t++
 	}
+
+	if t >= retries {
+		return 0, fmt.Errorf("number of retries exceeded on file %s, please verify manually", src)
+	}
+
 	return nBytes, nil
 }
 
 func CopyTree(src, dst string, retries int) error {
 	var newsrcpath, newdstpath string
 	var dr bool
-	validCopy := false
 	t := 0
-	var hashsrc, hashdst []byte
-	var err, err2 error
+	var err error
 	var fileInfo []fs.FileInfo
 
 	fileInfo, err = ioutil.ReadDir(src)
@@ -86,34 +89,25 @@ func CopyTree(src, dst string, retries int) error {
 		return err
 	}
 
-	for !validCopy && t < retries {
-		for _, file := range fileInfo {
-			newsrcpath = filepath.Join(src, file.Name())
-			newdstpath = filepath.Join(dst, file.Name())
-			dr, err = hasherutils.IsDirectory(newsrcpath)
-			if err != nil {
-				return err
-			}
-			if dr {
-				err = CopyTree(newsrcpath, newdstpath, retries)
-			} else {
-				_, err = copyFile(newsrcpath, newdstpath, retries)
-			}
-			if err != nil {
-				return err
-			}
+	for _, file := range fileInfo {
+		newsrcpath = filepath.Join(src, file.Name())
+		newdstpath = filepath.Join(dst, file.Name())
+		dr, err = hasherutils.IsDirectory(newsrcpath)
+		if err != nil {
+			return err
 		}
-		h := sha256.New()
-		h2 := sha256.New()
-		hashsrc, err = hasherutils.HashFolder(src, h)
-		hashdst, err2 = hasherutils.HashFolder(dst, h2)
-		if err == nil && err2 == nil {
-			if bytes.Equal(hashsrc, hashdst) {
-				validCopy = true
-			}
+		if dr {
+			err = CopyTree(newsrcpath, newdstpath, retries)
+		} else {
+			_, err = copyFile(newsrcpath, newdstpath, retries)
 		}
-		retries++
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
 
+	if t >= retries {
+		return fmt.Errorf("number of retries exceeded")
 	}
 
 	return nil
