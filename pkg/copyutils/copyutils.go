@@ -65,13 +65,12 @@ func copyFile(src, dst string, retries int) (int64, error) {
 	return nBytes, nil
 }
 
-func CopyTree(src, dst string, retries int) error {
+func CopyTree(src, dst string, retries int, sizeCopied *int64) error {
 	var newsrcpath, newdstpath string
 	var dr bool
 	t := 0
 	var err error
 	var fileInfo []fs.FileInfo
-
 	fileInfo, err = ioutil.ReadDir(src)
 	if err != nil {
 		return err
@@ -97,9 +96,11 @@ func CopyTree(src, dst string, retries int) error {
 			return err
 		}
 		if dr {
-			err = CopyTree(newsrcpath, newdstpath, retries)
+			err = CopyTree(newsrcpath, newdstpath, retries, sizeCopied)
 		} else {
 			_, err = copyFile(newsrcpath, newdstpath, retries)
+			s, _ := os.Stat(newsrcpath)
+			*sizeCopied += s.Size()
 		}
 		if err != nil {
 			fmt.Println(err)
