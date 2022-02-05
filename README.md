@@ -7,7 +7,7 @@ This program uses xxhash hash to compare checksums for each of the file copied.
 
 ## How to use
 
-The GUI is built to be convenient to use. Just choose a source directory, an empty destination directory and click the "Start copy !" button !
+The GUI is built to be convenient to use. Just choose a source directory, one (or more) empty destination directory and click the "Start copy !" button !
 
 ## Contributing / Issues
 
