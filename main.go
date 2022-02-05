@@ -45,7 +45,7 @@ func isEmpty(name string) (bool, error) {
 
 // startCopy starts the checksumed copy using goroutines
 // This way, GUI is still ressponsive during copy
-func startCopy(src, dst string, retries int, pB *widgets.QProgressBar, startSync *widgets.QPushButton) {
+func startCopy(src string, dst []*widgets.QLabel, retries int, pB *widgets.QProgressBar, startSync *widgets.QPushButton) {
 
 	var failed bool = false
 
@@ -62,8 +62,15 @@ func startCopy(src, dst string, retries int, pB *widgets.QProgressBar, startSync
 
 	// Run the checksumed copy in a separated goroutine
 	var pe int64 = 0
+
+	var dstString []string
+
+	for _, f := range dst {
+		dstString = append(dstString, f.Text())
+	}
+
 	go func() {
-		err := copyutils.SafeCopyTree(src, dst, retries, &pe)
+		err := copyutils.SafeCopyTree(src, dstString, retries, &pe)
 		if err != nil {
 			startSync.SetText("Failed !")
 			failed = true
@@ -99,17 +106,26 @@ func selectDirectory(label *widgets.QLabel) {
 
 // checkDirs checks if the two directories selected
 // are eligible for copy
-func checkDirs(src, dst string, but *widgets.QPushButton) {
+func checkDirs(src string, dst []*widgets.QLabel, but *widgets.QPushButton) {
 
-	// Checks that destination folder is empty
-	emptyDestination, err := isEmpty(dst)
-	if !emptyDestination && dst != "" {
-		but.SetText("Destination isn't empty !")
-		but.SetStyleSheet("QPushButton {color: red;}")
+	eD := true
+	eL := false
+
+	for _, d := range dst {
+		// Checks that destination folders are empty
+		emptyDestination, _ := isEmpty(d.Text())
+		if !emptyDestination && d.Text() != "" {
+			eD = false
+			but.SetText("Destination isn't empty !")
+			but.SetStyleSheet("QPushButton {color: red;}")
+		}
+		if d.Text() == "" {
+			eL = true
+		}
 	}
 
 	// Check that src and dst are correct
-	if src != "" && dst != "" && err == nil && emptyDestination {
+	if src != "" && !eL && eD {
 		but.SetStyleSheet("")
 		but.SetText("Start copy !")
 		but.SetEnabled(true)
@@ -118,6 +134,9 @@ func checkDirs(src, dst string, but *widgets.QPushButton) {
 
 // Main loop
 func main() {
+
+	var DestLabels []*widgets.QLabel
+	var DestFileChoosers []*widgets.QPushButton
 
 	// Setup GUI
 	widgets.NewQApplication(len(os.Args), os.Args)
@@ -131,10 +150,16 @@ func main() {
 
 	// Setup destination box
 	var (
-		DestFileChooser = widgets.NewQPushButton2("Choose destination folder !", nil)
-		DestGroup       = widgets.NewQGroupBox2("Destination", nil)
-		DestLabel       = widgets.NewQLabel2("", nil, 0)
+		DestFileChooser       = widgets.NewQPushButton2("Choose destination folder !", nil)
+		DestGroup             = widgets.NewQGroupBox2("Destination", nil)
+		DestLabel             = widgets.NewQLabel2("", nil, 0)
+		DestAddFileChooser    = widgets.NewQPushButton2("Add a destination folder !", nil)
+		DestRemoveFileChooser = widgets.NewQPushButton2("Remove a destination folder !", nil)
 	)
+
+	DestLabels = append(DestLabels, DestLabel)
+	DestFileChoosers = append(DestFileChoosers, DestFileChooser)
+	DestRemoveFileChooser.SetStyleSheet("QPushButton {color: red;}")
 
 	// Setup start syncing box
 	var (
@@ -149,46 +174,74 @@ func main() {
 	ProgressBar.SetValue(0)
 	StartButton.SetEnabled(false)
 
+	// Setup window Layout
+	var SourceLayout = widgets.NewQGridLayout2()
+	SourceLayout.AddWidget(SourceFileChooser)
+	SourceLayout.AddWidget(SourceLabel)
+	SourceGroup.SetLayout(SourceLayout)
+
+	var DestLayout = widgets.NewQGridLayout2()
+	DestLayout.AddWidget(DestFileChooser)
+	DestLayout.AddWidget(DestLabel)
+	DestGroup.SetLayout(DestLayout)
+
+	var StartLayout = widgets.NewQGridLayout2()
+	StartLayout.AddWidget(ProgressBar)
+	StartLayout.AddWidget(StartButton)
+	StartGroup.SetLayout(StartLayout)
+
+	var layout = widgets.NewQGridLayout2()
+	layout.AddWidget(SourceGroup)
+	layout.AddWidget(DestGroup)
+	layout.AddWidget(DestAddFileChooser)
+	layout.AddWidget(DestRemoveFileChooser)
+	layout.AddWidget(StartGroup)
+
+	// Setup window
+	var window = widgets.NewQMainWindow(nil, 0)
+	window.SetWindowTitle("FileHasher")
+
 	// Connect buttons to their functions
 	SourceFileChooser.ConnectClicked(func(checked bool) {
 		selectDirectory(SourceLabel)
-		checkDirs(SourceLabel.Text(), DestLabel.Text(), StartButton)
+		checkDirs(SourceLabel.Text(), DestLabels, StartButton)
 
 	})
 	DestFileChooser.ConnectClicked(func(checked bool) {
 		selectDirectory(DestLabel)
-		checkDirs(SourceLabel.Text(), DestLabel.Text(), StartButton)
+		checkDirs(SourceLabel.Text(), DestLabels, StartButton)
 	})
 	StartButton.ConnectClicked(func(checked bool) {
 		StartButton.SetEnabled(false)
-		go startCopy(SourceLabel.Text(), DestLabel.Text(), 5, ProgressBar, StartButton)
+		go startCopy(SourceLabel.Text(), DestLabels, 5, ProgressBar, StartButton)
 	})
 
-	// Setup window Layout
-	var SourceLayout = widgets.NewQGridLayout2()
-	SourceLayout.AddWidget2(SourceFileChooser, 0, 0, 0)
-	SourceLayout.AddWidget2(SourceLabel, 1, 0, 0)
-	SourceGroup.SetLayout(SourceLayout)
+	DestRemoveFileChooser.ConnectClicked(func(checked bool) {
+		if len(DestFileChoosers) > 1 && len(DestLabels) > 1 {
+			DestLayout.RemoveWidget(DestFileChoosers[len(DestFileChoosers)-1])
+			DestLayout.RemoveWidget(DestLabels[len(DestLabels)-1])
+			DestFileChoosers[len(DestFileChoosers)-1].Hide()
+			DestLabels[len(DestLabels)-1].Hide()
+			DestFileChoosers = DestFileChoosers[:len(DestFileChoosers)-1]
+			DestLabels = DestLabels[:len(DestLabels)-1]
+		}
+	})
 
-	var DestLayout = widgets.NewQGridLayout2()
-	DestLayout.AddWidget2(DestFileChooser, 0, 0, 0)
-	DestLayout.AddWidget2(DestLabel, 1, 0, 0)
-	DestGroup.SetLayout(DestLayout)
+	DestAddFileChooser.ConnectClicked(func(checked bool) {
+		newDestFileChooser := widgets.NewQPushButton2("Choose destination folder !", nil)
+		newDestLabel := widgets.NewQLabel2("", nil, 0)
+		DestLabels = append(DestLabels, newDestLabel)
+		DestFileChoosers = append(DestFileChoosers, newDestFileChooser)
+		newDestFileChooser.ConnectClicked(func(checked bool) {
+			selectDirectory(newDestLabel)
+			checkDirs(SourceLabel.Text(), DestLabels, StartButton)
+		})
+		DestLayout.AddWidget(newDestFileChooser)
+		DestLayout.AddWidget(newDestLabel)
+		window.AdjustSize()
+	})
 
-	var StartLayout = widgets.NewQGridLayout2()
-	StartLayout.AddWidget2(ProgressBar, 0, 0, 0)
-	StartLayout.AddWidget2(StartButton, 1, 0, 0)
-	StartGroup.SetLayout(StartLayout)
-
-	var layout = widgets.NewQGridLayout2()
-	layout.AddWidget2(SourceGroup, 0, 0, 0)
-	layout.AddWidget2(DestGroup, 1, 0, 0)
-	layout.AddWidget2(StartGroup, 2, 0, 0)
-
-	// Setup window
-	var window = widgets.NewQMainWindow(nil, 0)
-	window.SetWindowTitle("Filehasher")
-
+	// Show things on window
 	var centralWidget = widgets.NewQWidget(window, 0)
 	centralWidget.SetLayout(layout)
 	window.SetCentralWidget(centralWidget)
