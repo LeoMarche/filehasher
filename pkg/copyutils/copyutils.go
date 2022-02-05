@@ -15,7 +15,7 @@ import (
 )
 
 // copyFile copies a source file to multiple destination files
-func copyFile(src io.Reader, dst []io.Writer, sizeCopied *int64) error {
+func copyFile(src io.Reader, dst []*os.File, sizeCopied *int64) error {
 
 	var err error
 	var ew error
@@ -77,7 +77,7 @@ func copyFile(src io.Reader, dst []io.Writer, sizeCopied *int64) error {
 }
 
 // safeCopyFile copies a file and verify that the source hash is the same as the destination hash
-func safeCopyFile(src, dst string, retries int, sizeCopied *int64) (int64, error) {
+func safeCopyFile(src string, dst []string, retries int, sizeCopied *int64) (int64, error) {
 
 	// Variables
 	var validCopy bool = false
@@ -108,15 +108,22 @@ func safeCopyFile(src, dst string, retries int, sizeCopied *int64) (int64, error
 		}
 		defer source.Close()
 
-		// Opens the destination file
-		destination, err := os.Create(dst)
-		if err != nil {
-			return 0, err
+		var destination []*os.File
+
+		for _, f := range dst {
+
+			// Opens the destination file
+			d, err := os.Create(f)
+			if err != nil {
+				return 0, err
+			}
+			destination = append(destination, d)
+			defer d.Close()
+
 		}
-		defer destination.Close()
 
 		// Executes the copy
-		err = copyFile(source, []io.Writer{destination}, sizeCopied)
+		err = copyFile(source, destination, sizeCopied)
 		if err != nil {
 			return 0, err
 		}
@@ -125,14 +132,19 @@ func safeCopyFile(src, dst string, retries int, sizeCopied *int64) (int64, error
 		h := xxhash.New()
 		h2 := xxhash.New()
 		hashsrc, err = hasherutils.HashFile(src, h)
-		hashdst, err2 = hasherutils.HashFile(dst, h2)
 
-		// Checks that the files are the same
-		if err == nil && err2 == nil {
-			if bytes.Equal(hashsrc, hashdst) {
-				validCopy = true
+		validCopy = true
+		for _, f := range dst {
+			hashdst, err2 = hasherutils.HashFile(f, h2)
+
+			// Checks that the files are the same
+			if err == nil && err2 == nil {
+				if bytes.Equal(hashsrc, hashdst) {
+					validCopy = true
+				}
 			}
 		}
+
 		t++
 	}
 
@@ -147,10 +159,11 @@ func safeCopyFile(src, dst string, retries int, sizeCopied *int64) (int64, error
 // SafeCopyTree copies a whole directory and its content
 // It verifies that all files copied have the same
 // source and destination hashes
-func SafeCopyTree(src, dst string, retries int, sizeCopied *int64) error {
+func SafeCopyTree(src string, dst []string, retries int, sizeCopied *int64) error {
 
 	// Variables
-	var newsrcpath, newdstpath string
+	var newsrcpath string
+	var newdstpath []string
 	var dr bool
 	var err error
 	var fileInfo []fs.FileInfo
@@ -170,16 +183,21 @@ func SafeCopyTree(src, dst string, retries int, sizeCopied *int64) error {
 		return err
 	}
 
-	// Creates the destination directory
-	err = os.MkdirAll(dst, fs.ModePerm)
-	if err != nil {
-		return err
+	for _, f := range dst {
+		// Creates the destination directory
+		err = os.MkdirAll(f, fs.ModePerm)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Recursively executes copy on the files and subdirectories
 	for _, file := range fileInfo {
+		newdstpath = newdstpath[:0]
 		newsrcpath = filepath.Join(src, file.Name())
-		newdstpath = filepath.Join(dst, file.Name())
+		for _, f := range dst {
+			newdstpath = append(newdstpath, filepath.Join(f, file.Name()))
+		}
 		dr, err = hasherutils.IsDirectory(newsrcpath)
 		if err != nil {
 			return err
