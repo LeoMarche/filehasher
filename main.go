@@ -7,54 +7,11 @@ import (
 	"time"
 
 	"github.com/LeoMarche/filehasher/pkg/copyutils"
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/therecipe/qt/widgets"
 )
 
 var WINDOW_HEIGHT int = 600
 var WINDOW_WIDTH int = 400
-
-func choose(l *gtk.Entry) {
-	dlg, _ := gtk.FileChooserDialogNewWith2Buttons(
-		"Choose source folder", nil, gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
-		"Choose Folder", gtk.RESPONSE_OK, "Cancel", gtk.RESPONSE_CANCEL,
-	)
-	dlg.SetDefaultResponse(gtk.RESPONSE_OK)
-	response := dlg.Run()
-	if response == gtk.RESPONSE_OK {
-		filename := dlg.GetFilename()
-		l.SetText(filename)
-	}
-	dlg.Destroy()
-}
-
-func verifyFolder(srcPath, dstPath string) error {
-	if srcPath == "" || dstPath == "" {
-		return fmt.Errorf("at least one directory is empty string")
-	}
-	s1, err := os.Stat(srcPath)
-	if err != nil {
-		return err
-	}
-	if !s1.IsDir() {
-		return fmt.Errorf("specified string is not a directory")
-	}
-	s2, err := os.Stat(srcPath)
-	if err != nil {
-		return err
-	}
-	if !s2.IsDir() {
-		return fmt.Errorf("specified string is not a directory")
-	}
-
-	return nil
-}
-
-func setProgressBar(pB *gtk.ProgressBar, startSync *gtk.Button, percent float64) {
-	pB.SetFraction(percent)
-	if percent != 1.0 {
-		startSync.SetSensitive(false)
-	}
-}
 
 func dirSize(path string) (int64, error) {
 	var size int64
@@ -70,96 +27,110 @@ func dirSize(path string) (int64, error) {
 	return size, err
 }
 
-func startCopy(src, dst string, retries int, pB *gtk.ProgressBar, startSync *gtk.Button) {
+func startCopy(src, dst string, retries int, pB *widgets.QProgressBar, startSync *widgets.QPushButton) {
 	ds, err := dirSize(src)
+	pB.SetMaximum(int(ds))
 	if err != nil {
-		startSync.SetLabel("Failed !")
+		startSync.SetText("Failed !")
 	}
 	var pe int64 = 0
 	go func() {
 		err := copyutils.CopyTree(src, dst, retries, &pe)
 		if err != nil {
-			startSync.SetLabel("Failed !")
+			startSync.SetText("Failed !")
 		}
 	}()
 	for pe != ds {
-		setProgressBar(pB, startSync, float64(pe)/float64(ds))
-		time.Sleep(1 * time.Second)
+		pB.SetValue(int(pe))
+		time.Sleep(500 * time.Millisecond)
 	}
-	setProgressBar(pB, startSync, float64(pe)/float64(ds))
-	startSync.SetLabel("Finished !")
+	pB.SetValue(int(pe))
+	startSync.SetText("Finished !")
+}
+
+func selectDirectory(label *widgets.QLabel) {
+	path := widgets.QFileDialog_GetExistingDirectory(nil, "Choose directory", "", widgets.QFileDialog__ShowDirsOnly)
+	if path != "" {
+		label.SetText(path)
+	} else {
+		fmt.Println("not exists")
+	}
+}
+
+func checkDirs(d1, d2 string, but *widgets.QPushButton) {
+	if d1 != "" && d2 != "" {
+		but.SetEnabled(true)
+	}
 }
 
 func main() {
+	widgets.NewQApplication(len(os.Args), os.Args)
 
-	// New GTK window
-	gtk.Init(nil)
-	win, _ := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
-	win.SetTitle("filehasher")
-	win.Connect("destroy", func() {
-		gtk.MainQuit()
+	var (
+		echoSourceFileChooser = widgets.NewQPushButton2("Choose source folder !", nil)
+		echoSourceGroup       = widgets.NewQGroupBox2("Source", nil)
+		echoSourceLabel       = widgets.NewQLabel2("", nil, 0)
+	)
+
+	var (
+		echoDestFileChooser = widgets.NewQPushButton2("Choose destination folder !", nil)
+		echoDestGroup       = widgets.NewQGroupBox2("Destination", nil)
+		echoDestLabel       = widgets.NewQLabel2("", nil, 0)
+	)
+
+	var (
+		echoProgressBar = widgets.NewQProgressBar(nil)
+		echoStartGroup  = widgets.NewQGroupBox2("Start", nil)
+		echoStartButton = widgets.NewQPushButton2("Start copy !", nil)
+	)
+
+	echoProgressBar.SetMinimum(0)
+	echoProgressBar.SetMaximum(100)
+	echoProgressBar.SetValue(0)
+	echoStartButton.SetEnabled(false)
+
+	echoSourceFileChooser.ConnectClicked(func(checked bool) {
+		selectDirectory(echoSourceLabel)
+		checkDirs(echoDestLabel.Text(), echoSourceLabel.Text(), echoStartButton)
+
+	})
+	echoDestFileChooser.ConnectClicked(func(checked bool) {
+		selectDirectory(echoDestLabel)
+		checkDirs(echoDestLabel.Text(), echoSourceLabel.Text(), echoStartButton)
+	})
+	echoStartButton.ConnectClicked(func(checked bool) {
+		echoStartButton.SetEnabled(false)
+		go startCopy(echoSourceLabel.Text(), echoDestLabel.Text(), 5, echoProgressBar, echoStartButton)
 	})
 
-	// New Grid
-	grid, _ := gtk.GridNew()
-	win.Add(grid)
+	var echoSourceLayout = widgets.NewQGridLayout2()
+	echoSourceLayout.AddWidget2(echoSourceFileChooser, 0, 0, 0)
+	echoSourceLayout.AddWidget2(echoSourceLabel, 1, 0, 0)
+	echoSourceGroup.SetLayout(echoSourceLayout)
 
-	// Add button for Source Folder
-	sourceFolder, _ := gtk.EntryNew()
-	sourceFolder.SetMaxWidthChars(100)
-	grid.Add(sourceFolder)
-	chooseSourceFolder, _ := gtk.ButtonNewWithLabel("Source Folder")
-	grid.Add(chooseSourceFolder)
+	var echoDestLayout = widgets.NewQGridLayout2()
+	echoDestLayout.AddWidget2(echoDestFileChooser, 0, 0, 0)
+	echoDestLayout.AddWidget2(echoDestLabel, 1, 0, 0)
+	echoDestGroup.SetLayout(echoDestLayout)
 
-	// Add button for destination folder
-	destinationFolder, _ := gtk.EntryNew()
-	grid.Attach(destinationFolder, 0, 1, 1, 1)
-	chooseDestinationFolder, _ := gtk.ButtonNewWithLabel("Destination Folder")
-	grid.Attach(chooseDestinationFolder, 1, 1, 1, 1)
+	var echoStartLayout = widgets.NewQGridLayout2()
+	echoStartLayout.AddWidget2(echoProgressBar, 0, 0, 0)
+	echoStartLayout.AddWidget2(echoStartButton, 1, 0, 0)
+	echoStartGroup.SetLayout(echoStartLayout)
 
-	// Add button for starting sync
-	startSync, _ := gtk.ButtonNewWithLabel("Start Syncing")
-	grid.Attach(startSync, 0, 2, 2, 1)
+	var layout = widgets.NewQGridLayout2()
+	layout.AddWidget2(echoSourceGroup, 0, 0, 0)
+	layout.AddWidget2(echoDestGroup, 1, 0, 0)
+	layout.AddWidget2(echoStartGroup, 2, 0, 0)
 
-	// Add progress bar
-	pBar, _ := gtk.ProgressBarNew()
-	grid.Attach(pBar, 0, 3, 2, 1)
+	var window = widgets.NewQMainWindow(nil, 0)
+	window.SetWindowTitle("Filehasher")
 
-	pBar.SetFraction(0.0)
+	var centralWidget = widgets.NewQWidget(window, 0)
+	centralWidget.SetLayout(layout)
+	window.SetCentralWidget(centralWidget)
 
-	chooseSourceFolder.Connect("clicked", func() {
-		choose(sourceFolder)
-		t1, err1 := sourceFolder.GetText()
-		t2, err2 := destinationFolder.GetText()
-		if err1 == nil && err2 == nil && verifyFolder(t1, t2) == nil {
-			startSync.Show()
-		}
-	})
+	window.Show()
 
-	chooseDestinationFolder.Connect("clicked", func() {
-		choose(destinationFolder)
-		t1, err1 := sourceFolder.GetText()
-		t2, err2 := destinationFolder.GetText()
-		if err1 == nil && err2 == nil && verifyFolder(t1, t2) == nil {
-			startSync.Show()
-		} else {
-			startSync.Hide()
-		}
-	})
-
-	startSync.Connect("clicked", func() {
-		t1, err1 := sourceFolder.GetText()
-		t2, err2 := destinationFolder.GetText()
-		if err1 != nil || err2 != nil {
-			fmt.Println("Error with source and destination folders")
-		}
-		go startCopy(t1, t2, 5, pBar, startSync)
-		startSync.SetSensitive(false)
-	})
-
-	// Show window
-	win.SetDefaultSize(grid.GetSizeRequest())
-	win.ShowAll()
-	startSync.Hide()
-	gtk.Main()
+	widgets.QApplication_Exec()
 }
