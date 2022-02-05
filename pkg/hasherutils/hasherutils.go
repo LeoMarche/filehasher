@@ -3,11 +3,11 @@ package hasherutils
 import (
 	"hash"
 	"io"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 )
 
+// HashFile computes the checksum of a file using
+// the provided hash function
 func HashFile(path string, h hash.Hash) ([]byte, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -22,6 +22,7 @@ func HashFile(path string, h hash.Hash) ([]byte, error) {
 	return h.Sum((nil)), nil
 }
 
+// IsDirectory checks wether a path points to a directory or not
 func IsDirectory(path string) (bool, error) {
 	fileInfo, err := os.Stat(path)
 	if err != nil {
@@ -29,31 +30,4 @@ func IsDirectory(path string) (bool, error) {
 	}
 
 	return fileInfo.IsDir(), err
-}
-
-func HashFolder(path string, h hash.Hash) ([]byte, error) {
-	var newpath string
-	var dr bool
-	fileInfo, err := ioutil.ReadDir(path)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, file := range fileInfo {
-		newpath = filepath.Join(path, file.Name())
-		dr, err = IsDirectory(newpath)
-		if err != nil {
-			return nil, err
-		}
-		if dr {
-			_, err = HashFolder(newpath, h)
-		} else {
-			_, err = HashFile(newpath, h)
-		}
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return h.Sum((nil)), nil
 }
