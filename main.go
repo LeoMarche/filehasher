@@ -136,6 +136,7 @@ func checkDirs(src string, dst []*widgets.QLabel, but *widgets.QPushButton) {
 func main() {
 
 	var DestLabels []*widgets.QLabel
+	var DestFileChoosers []*widgets.QPushButton
 
 	// Setup GUI
 	widgets.NewQApplication(len(os.Args), os.Args)
@@ -149,13 +150,16 @@ func main() {
 
 	// Setup destination box
 	var (
-		DestFileChooser    = widgets.NewQPushButton2("Choose destination folder !", nil)
-		DestGroup          = widgets.NewQGroupBox2("Destination", nil)
-		DestLabel          = widgets.NewQLabel2("", nil, 0)
-		DestAddFileChooser = widgets.NewQPushButton2("Add a destination folder !", nil)
+		DestFileChooser       = widgets.NewQPushButton2("Choose destination folder !", nil)
+		DestGroup             = widgets.NewQGroupBox2("Destination", nil)
+		DestLabel             = widgets.NewQLabel2("", nil, 0)
+		DestAddFileChooser    = widgets.NewQPushButton2("Add a destination folder !", nil)
+		DestRemoveFileChooser = widgets.NewQPushButton2("Remove a destination folder !", nil)
 	)
 
 	DestLabels = append(DestLabels, DestLabel)
+	DestFileChoosers = append(DestFileChoosers, DestFileChooser)
+	DestRemoveFileChooser.SetStyleSheet("QPushButton {color: red;}")
 
 	// Setup start syncing box
 	var (
@@ -169,21 +173,6 @@ func main() {
 	ProgressBar.SetMaximum(100)
 	ProgressBar.SetValue(0)
 	StartButton.SetEnabled(false)
-
-	// Connect buttons to their functions
-	SourceFileChooser.ConnectClicked(func(checked bool) {
-		selectDirectory(SourceLabel)
-		checkDirs(SourceLabel.Text(), DestLabels, StartButton)
-
-	})
-	DestFileChooser.ConnectClicked(func(checked bool) {
-		selectDirectory(DestLabel)
-		checkDirs(SourceLabel.Text(), DestLabels, StartButton)
-	})
-	StartButton.ConnectClicked(func(checked bool) {
-		StartButton.SetEnabled(false)
-		go startCopy(SourceLabel.Text(), DestLabels, 5, ProgressBar, StartButton)
-	})
 
 	// Setup window Layout
 	var SourceLayout = widgets.NewQGridLayout2()
@@ -205,24 +194,54 @@ func main() {
 	layout.AddWidget(SourceGroup)
 	layout.AddWidget(DestGroup)
 	layout.AddWidget(DestAddFileChooser)
+	layout.AddWidget(DestRemoveFileChooser)
 	layout.AddWidget(StartGroup)
+
+	// Setup window
+	var window = widgets.NewQMainWindow(nil, 0)
+	window.SetWindowTitle("FileHasher")
+
+	// Connect buttons to their functions
+	SourceFileChooser.ConnectClicked(func(checked bool) {
+		selectDirectory(SourceLabel)
+		checkDirs(SourceLabel.Text(), DestLabels, StartButton)
+
+	})
+	DestFileChooser.ConnectClicked(func(checked bool) {
+		selectDirectory(DestLabel)
+		checkDirs(SourceLabel.Text(), DestLabels, StartButton)
+	})
+	StartButton.ConnectClicked(func(checked bool) {
+		StartButton.SetEnabled(false)
+		go startCopy(SourceLabel.Text(), DestLabels, 5, ProgressBar, StartButton)
+	})
+
+	DestRemoveFileChooser.ConnectClicked(func(checked bool) {
+		if len(DestFileChoosers) > 1 && len(DestLabels) > 1 {
+			DestLayout.RemoveWidget(DestFileChoosers[len(DestFileChoosers)-1])
+			DestLayout.RemoveWidget(DestLabels[len(DestLabels)-1])
+			DestFileChoosers[len(DestFileChoosers)-1].Hide()
+			DestLabels[len(DestLabels)-1].Hide()
+			DestFileChoosers = DestFileChoosers[:len(DestFileChoosers)-1]
+			DestLabels = DestLabels[:len(DestLabels)-1]
+		}
+	})
 
 	DestAddFileChooser.ConnectClicked(func(checked bool) {
 		newDestFileChooser := widgets.NewQPushButton2("Choose destination folder !", nil)
 		newDestLabel := widgets.NewQLabel2("", nil, 0)
 		DestLabels = append(DestLabels, newDestLabel)
+		DestFileChoosers = append(DestFileChoosers, newDestFileChooser)
 		newDestFileChooser.ConnectClicked(func(checked bool) {
 			selectDirectory(newDestLabel)
 			checkDirs(SourceLabel.Text(), DestLabels, StartButton)
 		})
 		DestLayout.AddWidget(newDestFileChooser)
 		DestLayout.AddWidget(newDestLabel)
+		window.AdjustSize()
 	})
 
-	// Setup window
-	var window = widgets.NewQMainWindow(nil, 0)
-	window.SetWindowTitle("Filehasher")
-
+	// Show things on window
 	var centralWidget = widgets.NewQWidget(window, 0)
 	centralWidget.SetLayout(layout)
 	window.SetCentralWidget(centralWidget)
