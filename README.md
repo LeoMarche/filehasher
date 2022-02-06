@@ -2,7 +2,7 @@
 
 ## Description
 
-FileHasher is a little program writtent in Go allowing to safely copy a source directory to a destination directory.
+FileHasher is a little program written in Go allowing to safely copy a source directory to a destination directory.
 This program uses xxhash hash to compare checksums for each of the file copied.
 
 ## How to use
