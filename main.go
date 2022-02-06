@@ -45,7 +45,7 @@ func isEmpty(name string) (bool, error) {
 
 // startCopy starts the checksumed copy using goroutines
 // This way, GUI is still ressponsive during copy
-func startCopy(src string, dst []*widgets.QLabel, retries int, pB *widgets.QProgressBar, startSync *widgets.QPushButton) {
+func startCopy(src string, dst []*widgets.QLabel, retries int, pB *widgets.QProgressBar, startSync *widgets.QPushButton, logsCopy *widgets.QLabel) {
 
 	var failed bool = false
 
@@ -62,7 +62,7 @@ func startCopy(src string, dst []*widgets.QLabel, retries int, pB *widgets.QProg
 
 	// Run the checksumed copy in a separated goroutine
 	var pe int64 = 0
-
+	var logs []error
 	var dstString []string
 
 	for _, f := range dst {
@@ -70,7 +70,7 @@ func startCopy(src string, dst []*widgets.QLabel, retries int, pB *widgets.QProg
 	}
 
 	go func() {
-		err := copyutils.SafeCopyTree(src, dstString, retries, &pe)
+		err := copyutils.SafeCopyTree(src, dstString, retries, &pe, &logs)
 		if err != nil {
 			startSync.SetText("Failed !")
 			failed = true
@@ -84,6 +84,11 @@ func startCopy(src string, dst []*widgets.QLabel, retries int, pB *widgets.QProg
 		if failed {
 			return
 		}
+		str := ""
+		for _, l := range logs {
+			str += l.Error() + "\n"
+		}
+		logsCopy.SetText(str)
 	}
 
 	// Actuate the progress bar once at 100%
@@ -174,6 +179,13 @@ func main() {
 	ProgressBar.SetValue(0)
 	StartButton.SetEnabled(false)
 
+	var (
+		Logs      = widgets.NewQLabel2("", nil, 0)
+		LogsGroup = widgets.NewQGroupBox2("Errors", nil)
+	)
+
+	Logs.SetStyleSheet("QLabel {color: red;}")
+
 	// Setup window Layout
 	var SourceLayout = widgets.NewQGridLayout2()
 	SourceLayout.AddWidget(SourceFileChooser)
@@ -190,12 +202,17 @@ func main() {
 	StartLayout.AddWidget(StartButton)
 	StartGroup.SetLayout(StartLayout)
 
+	var LogsLayout = widgets.NewQGridLayout2()
+	LogsLayout.AddWidget(Logs)
+	LogsGroup.SetLayout(LogsLayout)
+
 	var layout = widgets.NewQGridLayout2()
 	layout.AddWidget(SourceGroup)
 	layout.AddWidget(DestGroup)
 	layout.AddWidget(DestAddFileChooser)
 	layout.AddWidget(DestRemoveFileChooser)
 	layout.AddWidget(StartGroup)
+	layout.AddWidget3(LogsGroup, 0, 1, 5, 1, 0)
 
 	// Setup window
 	var window = widgets.NewQMainWindow(nil, 0)
@@ -213,7 +230,7 @@ func main() {
 	})
 	StartButton.ConnectClicked(func(checked bool) {
 		StartButton.SetEnabled(false)
-		go startCopy(SourceLabel.Text(), DestLabels, 5, ProgressBar, StartButton)
+		go startCopy(SourceLabel.Text(), DestLabels, 5, ProgressBar, StartButton, Logs)
 	})
 
 	DestRemoveFileChooser.ConnectClicked(func(checked bool) {

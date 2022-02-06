@@ -184,7 +184,7 @@ func TestSafeCopyTree(t *testing.T) {
 			dests = append(dests, filepath.Join(basepath, d))
 		}
 
-		err := SafeCopyTree(filepath.Join(basepath, te.src), dests, 5, &sizeCopied)
+		err := SafeCopyTree(filepath.Join(basepath, te.src), dests, 5, &sizeCopied, &[]error{})
 
 		if te.expectedError {
 			assert.Error(t, err)

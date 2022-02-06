@@ -158,7 +158,7 @@ func safeCopyFile(src string, dst []string, retries int, sizeCopied *int64) erro
 // SafeCopyTree copies a whole directory and its content
 // It verifies that all files copied have the same
 // source and destination hashes
-func SafeCopyTree(src string, dst []string, retries int, sizeCopied *int64) error {
+func SafeCopyTree(src string, dst []string, retries int, sizeCopied *int64, logs *[]error) error {
 
 	// Variables
 	var newsrcpath string
@@ -173,20 +173,20 @@ func SafeCopyTree(src string, dst []string, retries int, sizeCopied *int64) erro
 		return fmt.Errorf("%s is not a directory", src)
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("error when checking if %s is a directory", src)
 	}
 
 	// Gets infos on the directory and verify
 	fileInfo, err = ioutil.ReadDir(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("error when reading dir %s : %s", src, err.Error())
 	}
 
 	for _, f := range dst {
 		// Creates the destination directory
 		err = os.MkdirAll(f, fs.ModePerm)
 		if err != nil {
-			return err
+			return fmt.Errorf("error when creating dir %s : %s", f, err.Error())
 		}
 	}
 
@@ -199,15 +199,15 @@ func SafeCopyTree(src string, dst []string, retries int, sizeCopied *int64) erro
 		}
 		dr, err = hasherutils.IsDirectory(newsrcpath)
 		if err != nil {
-			return err
+			return fmt.Errorf("error when checking if %s is a directory : %s", newsrcpath, err.Error())
 		}
 		if dr {
-			err = SafeCopyTree(newsrcpath, newdstpath, retries, sizeCopied)
+			err = SafeCopyTree(newsrcpath, newdstpath, retries, sizeCopied, logs)
 		} else {
 			err = safeCopyFile(newsrcpath, newdstpath, retries, sizeCopied)
 		}
 		if err != nil {
-			fmt.Println(err)
+			*logs = append(*logs, fmt.Errorf("error when copying %s : %s", newsrcpath, err.Error()))
 		}
 	}
 
