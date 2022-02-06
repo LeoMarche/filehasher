@@ -44,7 +44,7 @@ func copyFile(src io.Reader, dst []*os.File, sizeCopied *int64) error {
 
 			// Write to all destination files
 			for _, d := range dst {
-				nw, ew := d.Write(buf[0:nr])
+				nw, ew = d.Write(buf[0:nr])
 				if nw < 0 || nr < nw {
 					nw = 0
 					if ew == nil {
@@ -77,11 +77,10 @@ func copyFile(src io.Reader, dst []*os.File, sizeCopied *int64) error {
 }
 
 // safeCopyFile copies a file and verify that the source hash is the same as the destination hash
-func safeCopyFile(src string, dst []string, retries int, sizeCopied *int64) (int64, error) {
+func safeCopyFile(src string, dst []string, retries int, sizeCopied *int64) error {
 
 	// Variables
 	var validCopy bool = false
-	var nBytes int64
 	var err, err2 error
 	var sourceFileStat fs.FileInfo
 	var hashsrc, hashdst []byte
@@ -95,16 +94,16 @@ func safeCopyFile(src string, dst []string, retries int, sizeCopied *int64) (int
 		// Checks that the source file is correct
 		sourceFileStat, err = os.Stat(src)
 		if err != nil {
-			return 0, err
+			return err
 		}
 		if !sourceFileStat.Mode().IsRegular() {
-			return 0, fmt.Errorf("%s is not a regular file", src)
+			return fmt.Errorf("%s is not a regular file", src)
 		}
 
 		// Opens the source file
 		source, err := os.Open(src)
 		if err != nil {
-			return 0, err
+			return err
 		}
 		defer source.Close()
 
@@ -115,7 +114,7 @@ func safeCopyFile(src string, dst []string, retries int, sizeCopied *int64) (int
 			// Opens the destination file
 			d, err := os.Create(f)
 			if err != nil {
-				return 0, err
+				return err
 			}
 			destination = append(destination, d)
 			defer d.Close()
@@ -125,7 +124,7 @@ func safeCopyFile(src string, dst []string, retries int, sizeCopied *int64) (int
 		// Executes the copy
 		err = copyFile(source, destination, sizeCopied)
 		if err != nil {
-			return 0, err
+			return err
 		}
 
 		// Hashes the source and the destination
@@ -150,10 +149,10 @@ func safeCopyFile(src string, dst []string, retries int, sizeCopied *int64) (int
 
 	// If we exceeded the maximum number of retries
 	if t >= retries {
-		return 0, fmt.Errorf("number of retries exceeded on file %s, please verify manually", src)
+		return fmt.Errorf("number of retries exceeded on file %s, please verify manually", src)
 	}
 
-	return nBytes, nil
+	return nil
 }
 
 // SafeCopyTree copies a whole directory and its content
@@ -205,7 +204,7 @@ func SafeCopyTree(src string, dst []string, retries int, sizeCopied *int64) erro
 		if dr {
 			err = SafeCopyTree(newsrcpath, newdstpath, retries, sizeCopied)
 		} else {
-			_, err = safeCopyFile(newsrcpath, newdstpath, retries, sizeCopied)
+			err = safeCopyFile(newsrcpath, newdstpath, retries, sizeCopied)
 		}
 		if err != nil {
 			fmt.Println(err)
